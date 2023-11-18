@@ -8,7 +8,7 @@ const prot = process.env.PORT || 5000;
 
 // middleware
 app.use(cors({
-    origin: ["http://localhost:5173", "http://localhost:5174"],
+    origin: ["http://localhost:5173", "http://localhost:5174",],
     methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
     credentials: true,
 }));
@@ -32,7 +32,7 @@ const client = new MongoClient(uri, {
 async function run() {
     try {
 
-        const menuCollection = client.db("BistroDB").collection("menu");
+        const menuCollection = client.db("BistroDB").collection("MenuFix");
         const reviewsCollection = client.db("BistroDB").collection("reviews");
         const cartCollection = client.db("BistroDB").collection("carts");
         const UserCollection = client.db("BistroDB").collection("users");
@@ -52,7 +52,7 @@ async function run() {
         // middle ware
 
         const verifyToken = (req, res, next) => {
-            console.log("checking inside the verify token", req.headers.authorization);
+            // console.log("checking inside the verify token", req.headers.authorization);
 
             if (!req.headers.authorization) {
                 return res.status(401).send({ message: "Unauthorized Access" })
@@ -86,6 +86,50 @@ async function run() {
             const result = await menuCollection.find().toArray();
             res.send(result);
         })
+        app.get('/menu/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) }
+            console.log("checking query", query)
+            const result = await menuCollection.findOne(query);
+            res.send(result);
+        })
+
+        app.post("/menu", async (req, res) => {
+            const item = req.body;
+            const result = await menuCollection.insertOne(item);
+            res.send(result);
+        })
+
+
+        app.patch("/menu/:id", async (req, res) => {
+            const item = req.body;
+            const id = req.params.id;
+            const filter = { _id: new ObjectId(id) }
+            const updatedDoc = {
+                $set: {
+                    name: item.name,
+                    category: item.category,
+                    price: item.price,
+                    recipe: item.recipe,
+                    image: item.image
+                }
+            }
+
+            const result = await menuCollection.updateOne(filter, updatedDoc)
+            res.send(result);
+        })
+
+
+
+        // delete menu
+        app.delete("/menu/:id", verifyToken, verifyAdmin, async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) };
+            const result = await menuCollection.deleteOne(query);
+            console.log(query)
+            res.send(result);
+        })
+
         app.get("/reviews", async (req, res) => {
             const result = await reviewsCollection.find().toArray();
             res.send(result);
@@ -140,7 +184,7 @@ async function run() {
         })
 
         // 
-        app.patch("/users/admin/:id", async (req, res) => {
+        app.patch("/users/admin/:id", verifyToken, verifyAdmin, async (req, res) => {
             const id = req.params.id;
             const filter = { _id: new ObjectId(id) };
             const updateDoc = {
@@ -152,10 +196,9 @@ async function run() {
             res.send(result);
         })
 
-        app.delete("/users/:id", async (req, res) => {
+        app.delete("/users/:id", verifyToken, verifyAdmin, async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) };
-            console.log(id)
             const result = await UserCollection.deleteOne(query);
             res.send(result);
         })
