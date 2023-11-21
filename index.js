@@ -3,6 +3,7 @@ const app = express();
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 require('dotenv').config()
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const prot = process.env.PORT || 5000;
 
 
@@ -18,6 +19,7 @@ app.use(express.json())
 
 
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const { parse } = require("dotenv");
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.4hda1bm.mongodb.net/?retryWrites=true&w=majority`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -36,6 +38,7 @@ async function run() {
         const reviewsCollection = client.db("BistroDB").collection("reviews");
         const cartCollection = client.db("BistroDB").collection("carts");
         const UserCollection = client.db("BistroDB").collection("users");
+        const PaymentCollection = client.db("BistroDB").collection("Payments");
 
 
 
@@ -228,6 +231,44 @@ async function run() {
             const query = { _id: new ObjectId(id) }
             const result = await cartCollection.deleteOne(query);
             res.send(result)
+        })
+
+        // payment intent
+        app.post(`/create-payment-intent`, async (req, res) => {
+            const { price } = req.body;
+            const amount = parseInt(price * 100);
+
+            console.log("Checking", amount)
+
+
+            // Create a PaymentIntent with the order amount and currency
+            const paymentIntent = await stripe.paymentIntents.create({
+                amount: amount,
+                currency: "usd",
+                payment_method_types: ["card"]
+
+            });
+            res.send({
+                clientSecret: paymentIntent.client_secret
+            })
+
+        })
+
+        // payment post
+
+        app.post("/payments", async (req, res) => {
+            const payment = req.body;
+            const paymentResult = await PaymentCollection.insertOne(payment);
+            // carefully delete each item form the cart
+            console.log("payments info", payment);
+            const query = {
+                _id: {
+                    $in: payment.cartIds.map(id => new ObjectId(id))
+                }
+            };
+
+            const deleteResult = await cartCollection.deleteMany(query);
+            res.send({ paymentResult, deleteResult });
         })
 
 
